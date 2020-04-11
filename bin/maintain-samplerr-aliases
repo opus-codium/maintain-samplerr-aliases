@@ -1,0 +1,129 @@
+#!/usr/bin/env ruby
+
+def usage
+  warn "usage: #{File.basename(__FILE__)} days-retention months-retention years-retention"
+  exit 1
+end
+
+index_prefix = '.samplerr-'
+alias_prefix = 'samplerr-'
+
+usage if ARGV.length != 3
+
+days_retention   = ARGV[0].to_i
+months_retention = ARGV[1].to_i
+years_retention  = ARGV[2].to_i
+
+usage if days_retention <= 0 || months_retention <= 0 || years_retention <= 0
+
+require 'date'
+
+require 'elasticsearch'
+
+client = Elasticsearch::Client.new log: false
+
+now = DateTime.now.new_offset(0)
+today = DateTime.new(now.year, now.month, now.day)
+
+daily_data_start   = today.prev_day(days_retention - 1)     # Do not count the current day
+monthly_data_start = today.prev_month(months_retention - 1) # Do not count the current month
+yearly_data_start  = today.prev_year(years_retention - 1)   # Do not count the current year
+
+daily_data_start = DateTime.new(daily_data_start.year, daily_data_start.month, daily_data_start.day)
+monthly_data_start = DateTime.new(monthly_data_start.year, monthly_data_start.month, 1)
+yearly_data_start = DateTime.new(yearly_data_start.year, 1, 1)
+
+actions = []
+
+existing_aliases = client.cat.aliases(format: 'json').select { |a| a['alias'].start_with?(alias_prefix) }
+
+indices = client.cat.indices(format: 'json').map { |i| i['index'] }.select { |i| i.start_with?(index_prefix) }
+
+existing_aliases.each do |a|
+  actions << {
+    remove: {
+      index: a['index'],
+      alias: a['alias'],
+    },
+  }
+end
+
+current_date = yearly_data_start
+
+while current_date.next_year < monthly_data_start
+  i = format('%<prefix>s%<year>d', prefix: index_prefix, year: current_date.year)
+  a = format('%<prefix>s%<year>d', prefix: alias_prefix, year: current_date.year)
+  if indices.include?(i)
+    actions << {
+      add: {
+        index: i,
+        alias: a,
+      },
+    }
+  end
+  current_date = current_date.next_year
+end
+
+actions << {
+  add: {
+    index: format('%<prefix>s%<year>d', prefix: index_prefix, year: current_date.year),
+    alias: format('%<prefix>s%<year>d', prefix: alias_prefix, year: current_date.year),
+    filter: {
+      range: {
+        '@timestamp': {
+          lt: monthly_data_start.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        },
+      },
+    },
+  },
+}
+
+current_date = monthly_data_start
+
+while current_date.next_month < daily_data_start
+  i = format('%<prefix>s%<year>d.%<month>02d', prefix: index_prefix, year: current_date.year, month: current_date.month)
+  a = format('%<prefix>s%<year>d.%<month>02d', prefix: alias_prefix, year: current_date.year, month: current_date.month)
+  if indices.include?(i)
+    actions << {
+      add: {
+        index: i,
+        alias: a,
+      },
+    }
+  end
+  current_date = current_date.next_month
+end
+
+actions << {
+  add: {
+    index: format('%<prefix>s%<year>d.%<month>02d', prefix: index_prefix, year: current_date.year, month: current_date.month),
+    alias: format('%<prefix>s%<year>d.%<month>02d', prefix: alias_prefix, year: current_date.year, month: current_date.month),
+    filter: {
+      range: {
+        '@timestamp': {
+          lt: daily_data_start.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        },
+      },
+    },
+  },
+}
+
+current_date = daily_data_start
+
+while current_date <= today
+  i = format('%<prefix>s%<year>d.%<month>02d.%<day>02d', prefix: index_prefix, year: current_date.year, month: current_date.month, day: current_date.day)
+  a = format('%<prefix>s%<year>d.%<month>02d.%<day>02d', prefix: alias_prefix, year: current_date.year, month: current_date.month, day: current_date.day)
+  if indices.include?(i)
+    actions << {
+      add: {
+        index: i,
+        alias: a,
+      },
+    }
+  end
+  current_date = current_date.next_day
+end
+
+client.indices.update_aliases body: {
+  actions: actions,
+}
