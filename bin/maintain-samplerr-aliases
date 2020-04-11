@@ -5,9 +5,6 @@ def usage
   exit 1
 end
 
-index_prefix = '.samplerr-'
-alias_prefix = 'samplerr-'
-
 usage if ARGV.length != 3
 
 days_retention   = ARGV[0].to_i
@@ -16,11 +13,10 @@ years_retention  = ARGV[2].to_i
 
 usage if days_retention <= 0 || months_retention <= 0 || years_retention <= 0
 
+require 'maintain_samplerr_aliases'
 require 'date'
 
-require 'elasticsearch'
-
-client = Elasticsearch::Client.new log: false
+samplerr_data = MaintainSamplerrAliases::SamplerrData.new
 
 now = DateTime.now.new_offset(0)
 today = DateTime.new(now.year, now.month, now.day)
@@ -33,97 +29,36 @@ daily_data_start = DateTime.new(daily_data_start.year, daily_data_start.month, d
 monthly_data_start = DateTime.new(monthly_data_start.year, monthly_data_start.month, 1)
 yearly_data_start = DateTime.new(yearly_data_start.year, 1, 1)
 
-actions = []
-
-existing_aliases = client.cat.aliases(format: 'json').select { |a| a['alias'].start_with?(alias_prefix) }
-
-indices = client.cat.indices(format: 'json').map { |i| i['index'] }.select { |i| i.start_with?(index_prefix) }
-
-existing_aliases.each do |a|
-  actions << {
-    remove: {
-      index: a['index'],
-      alias: a['alias'],
-    },
-  }
-end
+samplerr_data.remove_existing_aliases
 
 current_date = yearly_data_start
 
 while current_date.next_year < monthly_data_start
-  i = format('%<prefix>s%<year>d', prefix: index_prefix, year: current_date.year)
-  a = format('%<prefix>s%<year>d', prefix: alias_prefix, year: current_date.year)
-  if indices.include?(i)
-    actions << {
-      add: {
-        index: i,
-        alias: a,
-      },
-    }
-  end
+  name = current_date.year.to_s
+  samplerr_data.add_alias(name) if samplerr_data.index_exist?(name)
   current_date = current_date.next_year
 end
 
-actions << {
-  add: {
-    index: format('%<prefix>s%<year>d', prefix: index_prefix, year: current_date.year),
-    alias: format('%<prefix>s%<year>d', prefix: alias_prefix, year: current_date.year),
-    filter: {
-      range: {
-        '@timestamp': {
-          lt: monthly_data_start.strftime('%Y-%m-%dT%H:%M:%SZ'),
-        },
-      },
-    },
-  },
-}
+name = current_date.year.to_s
+samplerr_data.add_alias(name, monthly_data_start)
 
 current_date = monthly_data_start
 
 while current_date.next_month < daily_data_start
-  i = format('%<prefix>s%<year>d.%<month>02d', prefix: index_prefix, year: current_date.year, month: current_date.month)
-  a = format('%<prefix>s%<year>d.%<month>02d', prefix: alias_prefix, year: current_date.year, month: current_date.month)
-  if indices.include?(i)
-    actions << {
-      add: {
-        index: i,
-        alias: a,
-      },
-    }
-  end
+  name = format('%<year>d.%<month>02d', year: current_date.year, month: current_date.month)
+  samplerr_data.add_alias(name) if samplerr_data.index_exist?(name)
   current_date = current_date.next_month
 end
 
-actions << {
-  add: {
-    index: format('%<prefix>s%<year>d.%<month>02d', prefix: index_prefix, year: current_date.year, month: current_date.month),
-    alias: format('%<prefix>s%<year>d.%<month>02d', prefix: alias_prefix, year: current_date.year, month: current_date.month),
-    filter: {
-      range: {
-        '@timestamp': {
-          lt: daily_data_start.strftime('%Y-%m-%dT%H:%M:%SZ'),
-        },
-      },
-    },
-  },
-}
+name = format('%<year>d.%<month>02d', year: current_date.year, month: current_date.month)
+samplerr_data.add_alias(name, daily_data_start)
 
 current_date = daily_data_start
 
 while current_date <= today
-  i = format('%<prefix>s%<year>d.%<month>02d.%<day>02d', prefix: index_prefix, year: current_date.year, month: current_date.month, day: current_date.day)
-  a = format('%<prefix>s%<year>d.%<month>02d.%<day>02d', prefix: alias_prefix, year: current_date.year, month: current_date.month, day: current_date.day)
-  if indices.include?(i)
-    actions << {
-      add: {
-        index: i,
-        alias: a,
-      },
-    }
-  end
+  name = format('%<year>d.%<month>02d.%<day>02d', year: current_date.year, month: current_date.month, day: current_date.day)
+  samplerr_data.add_alias(name)
   current_date = current_date.next_day
 end
 
-client.indices.update_aliases body: {
-  actions: actions,
-}
+samplerr_data.commit
