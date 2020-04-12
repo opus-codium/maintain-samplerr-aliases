@@ -3,6 +3,70 @@ require 'maintain_samplerr_aliases'
 RSpec.describe MaintainSamplerrAliases::SamplerrData do
   let(:pending_actions) { subject.instance_variable_get(:@actions) }
 
+  context '#add_aliases' do
+    before do
+      allow_any_instance_of(MaintainSamplerrAliases::SamplerrData).to receive(:index_exist?).and_return(true)
+      subject.add_aliases(from_date, to_date, stride, format)
+    end
+
+    context 'yearly aliases' do
+      let(:from_date) { DateTime.new(2011, 1, 1) }
+      let(:to_date) { DateTime.new(2020, 3, 1) }
+      let(:stride) { :next_year }
+      let(:format) { '%Y' }
+
+      it 'builds proper aliases' do
+        expect(pending_actions).to eq(
+          [
+            { add: { alias: 'samplerr-2011', index: '.samplerr-2011' } },
+            { add: { alias: 'samplerr-2012', index: '.samplerr-2012' } },
+            { add: { alias: 'samplerr-2013', index: '.samplerr-2013' } },
+            { add: { alias: 'samplerr-2014', index: '.samplerr-2014' } },
+            { add: { alias: 'samplerr-2015', index: '.samplerr-2015' } },
+            { add: { alias: 'samplerr-2016', index: '.samplerr-2016' } },
+            { add: { alias: 'samplerr-2017', index: '.samplerr-2017' } },
+            { add: { alias: 'samplerr-2018', index: '.samplerr-2018' } },
+            { add: { alias: 'samplerr-2019', index: '.samplerr-2019' } },
+            { add: { alias: 'samplerr-2020', index: '.samplerr-2020', filter: { range: { '@timestamp': { lt: '2020-03-01T00:00:00Z' } } } } },
+          ]
+        )
+      end
+    end
+
+    context 'monthly aliases' do
+      let(:from_date) { DateTime.new(2020, 3, 1) }
+      let(:to_date) { DateTime.new(2020, 4, 9) }
+      let(:stride) { :next_month }
+      let(:format) { '%Y.%m' }
+
+      it 'builds proper aliases' do
+        expect(pending_actions).to eq(
+          [
+            { add: { alias: 'samplerr-2020.03', index: '.samplerr-2020.03' } },
+            { add: { alias: 'samplerr-2020.04', index: '.samplerr-2020.04', filter: { range: { '@timestamp': { lt: '2020-04-09T00:00:00Z' } } } } },
+          ]
+        )
+      end
+    end
+
+    context 'daily aliases' do
+      let(:from_date) { DateTime.new(2020, 4, 9) }
+      let(:to_date) { DateTime.new(2020, 4, 11) }
+      let(:stride) { :next_day }
+      let(:format) { '%Y.%m.%d' }
+
+      it 'builds proper aliases' do
+        expect(pending_actions).to eq(
+          [
+            { add: { alias: 'samplerr-2020.04.09', index: '.samplerr-2020.04.09' } },
+            { add: { alias: 'samplerr-2020.04.10', index: '.samplerr-2020.04.10' } },
+            { add: { alias: 'samplerr-2020.04.11', index: '.samplerr-2020.04.11' } },
+          ]
+        )
+      end
+    end
+  end
+
   context '#add_alias' do
     context 'without limit' do
       before do

@@ -22,6 +22,21 @@ module MaintainSamplerrAliases
       end
     end
 
+    def add_aliases(from_date, to_date, stride, format)
+      current_date = from_date
+
+      while current_date.send(stride) <= to_date
+        name = current_date.strftime(format)
+        add_alias(name) if index_exist?(name)
+        current_date = current_date.send(stride)
+      end
+
+      return unless current_date <= to_date
+
+      name = current_date.strftime(format)
+      add_alias(name, current_date < to_date ? to_date : nil)
+    end
+
     def add_alias(name, limit = nil)
       action = { index: "#{index_prefix}#{name}", alias: "#{alias_prefix}#{name}" }
       action[:filter] = { range: { '@timestamp': { lt: limit.strftime('%Y-%m-%dT%H:%M:%SZ') } } } if limit

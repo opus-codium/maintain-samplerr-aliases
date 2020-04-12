@@ -14,51 +14,6 @@ years_retention  = ARGV[2].to_i
 usage if days_retention <= 0 || months_retention <= 0 || years_retention <= 0
 
 require 'maintain_samplerr_aliases'
-require 'date'
 
-samplerr_data = MaintainSamplerrAliases::SamplerrData.new
-
-now = DateTime.now.new_offset(0)
-today = DateTime.new(now.year, now.month, now.day)
-
-daily_data_start   = today.prev_day(days_retention - 1)     # Do not count the current day
-monthly_data_start = today.prev_month(months_retention - 1) # Do not count the current month
-yearly_data_start  = today.prev_year(years_retention - 1)   # Do not count the current year
-
-daily_data_start = DateTime.new(daily_data_start.year, daily_data_start.month, daily_data_start.day)
-monthly_data_start = DateTime.new(monthly_data_start.year, monthly_data_start.month, 1)
-yearly_data_start = DateTime.new(yearly_data_start.year, 1, 1)
-
-samplerr_data.remove_existing_aliases
-
-current_date = yearly_data_start
-
-while current_date.next_year < monthly_data_start
-  name = current_date.year.to_s
-  samplerr_data.add_alias(name) if samplerr_data.index_exist?(name)
-  current_date = current_date.next_year
-end
-
-name = current_date.year.to_s
-samplerr_data.add_alias(name, monthly_data_start)
-
-current_date = monthly_data_start
-
-while current_date.next_month < daily_data_start
-  name = format('%<year>d.%<month>02d', year: current_date.year, month: current_date.month)
-  samplerr_data.add_alias(name) if samplerr_data.index_exist?(name)
-  current_date = current_date.next_month
-end
-
-name = format('%<year>d.%<month>02d', year: current_date.year, month: current_date.month)
-samplerr_data.add_alias(name, daily_data_start)
-
-current_date = daily_data_start
-
-while current_date <= today
-  name = format('%<year>d.%<month>02d.%<day>02d', year: current_date.year, month: current_date.month, day: current_date.day)
-  samplerr_data.add_alias(name)
-  current_date = current_date.next_day
-end
-
-samplerr_data.commit
+manager = MaintainSamplerrAliases::SamplerrDataManager.new(days_retention, months_retention, years_retention)
+manager.update_aliases
