@@ -1,4 +1,4 @@
-require 'maintain_samplerr_aliases'
+require 'maintain_samplerr_data'
 
 RSpec.describe MaintainSamplerrAliases::SamplerrData do
   subject { described_class.instance }

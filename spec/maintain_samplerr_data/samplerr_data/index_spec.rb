@@ -1,6 +1,4 @@
-require 'maintain_samplerr_aliases'
-require 'maintain_samplerr_aliases/samplerr_data'
-require 'maintain_samplerr_aliases/samplerr_data/index'
+require 'maintain_samplerr_data'
 
 RSpec.describe MaintainSamplerrAliases::SamplerrData::Index do
   let(:index) do

@@ -1,5 +1,5 @@
 require 'timecop'
-require 'maintain_samplerr_aliases'
+require 'maintain_samplerr_data'
 
 RSpec.describe MaintainSamplerrAliases::SamplerrDataManager do
   subject do
