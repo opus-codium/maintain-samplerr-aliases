@@ -16,4 +16,5 @@ usage if days_retention <= 0 || months_retention <= 0 || years_retention <= 0
 require 'maintain_samplerr_aliases'
 
 manager = MaintainSamplerrAliases::SamplerrDataManager.new(days_retention, months_retention, years_retention)
+manager.remove_expired_indices
 manager.update_aliases
