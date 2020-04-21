@@ -7,7 +7,7 @@ module MaintainSamplerrAliases
     end
 
     def remove_index(index_name)
-      client.indices.remove(index_name)
+      client.indices.delete(index: index_name)
       @indices = nil
     end
 
